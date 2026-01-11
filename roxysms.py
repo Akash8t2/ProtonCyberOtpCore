@@ -19,10 +19,6 @@ PHPSESSID = os.getenv("PHPSESSID")
 if not BOT_TOKEN or not CHAT_ID or not PHPSESSID:
     raise RuntimeError("Missing required ENV vars: BOT_TOKEN / CHAT_ID / PHPSESSID")
 
-COOKIES = {
-    "PHPSESSID": PHPSESSID
-}
-
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
     "X-Requested-With": "XMLHttpRequest",
@@ -48,7 +44,7 @@ logging.basicConfig(
 
 session = requests.Session()
 session.headers.update(HEADERS)
-session.cookies.update(COOKIES)
+session.cookies.set("PHPSESSID", PHPSESSID)
 
 # ================= STATE =================
 
@@ -82,7 +78,7 @@ def extract_otp(text):
     return m.group(1) if m else "N/A"
 
 
-def build_params(limit=5):
+def build_params(limit=10):
     today = datetime.now().strftime("%Y-%m-%d")
     return {
         "fdate1": f"{today} 00:00:00",
@@ -114,7 +110,7 @@ def format_message(row):
     number = str(row[2]) if row[2] else "N/A"
     raw_message = row[4]
 
-    # ✅ Country only
+    # 🌍 Country only
     country = raw_route.split("-")[0].split("_")[0]
     message = raw_message.strip() if raw_message else "Message not provided"
 
@@ -159,24 +155,36 @@ def send_telegram(text):
 def fetch_latest_sms():
     global last_seen_time
 
-    r = session.get(AJAX_URL, params=build_params(), timeout=20)
-    data = r.json()
+    try:
+        r = session.get(AJAX_URL, params=build_params(), timeout=25)
+        data = r.json()
+    except Exception:
+        return
 
     rows = data.get("aaData", [])
     if not rows or not isinstance(rows[0], list):
         return
 
+    # 🔥 FIRST RUN / RESTART → WEBSITE TIME BASELINE
+    if last_seen_time is None:
+        try:
+            baseline_time = datetime.strptime(rows[0][0], "%Y-%m-%d %H:%M:%S")
+            last_seen_time = baseline_time
+            save_state(last_seen_time)
+            logging.info(
+                "Baseline set from WEBSITE time (no OTP sent): %s",
+                last_seen_time
+            )
+        except Exception:
+            pass
+        return
+
+    # 🔁 LIVE MODE → STRICTLY NEW OTP ONLY
     for row in rows:
         try:
             sms_time = datetime.strptime(row[0], "%Y-%m-%d %H:%M:%S")
         except Exception:
             continue
-
-        if last_seen_time is None:
-            last_seen_time = sms_time
-            save_state(last_seen_time)
-            logging.info("LIVE baseline set: %s", last_seen_time)
-            return
 
         if sms_time > last_seen_time:
             last_seen_time = sms_time
