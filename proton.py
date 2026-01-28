@@ -11,15 +11,17 @@ import html
 
 # ================= CONFIG =================
 
-AJAX_URL = "http://213.32.24.208/ints/client/res/data_smscdr.php"
+# AJAX URL - new website
+AJAX_URL = "http://109.236.84.81/ints/client/res/data_smscdr.php"
 
-# Bot Configuration
-BOT_TOKEN = os.getenv("BOT_TOKEN") or "YOUR_BOT_TOKEN"
-CHAT_IDS = ["-1003559187782", "-1003316982194"]
+# Bot Configuration - ALL from environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+CHAT_IDS = os.getenv("CHAT_IDS", "-1003559187782,-1003316982194").split(",")
 
-# Cookies - Update with current session
+# Cookies - from environment variable
+PHPSESSID = os.getenv("PHPSESSID", "")
 COOKIES = {
-    "PHPSESSID": os.getenv("PHPSESSID") or "PUT_SESSION_HERE"
+    "PHPSESSID": PHPSESSID
 }
 
 HEADERS = {
@@ -27,20 +29,24 @@ HEADERS = {
     "X-Requested-With": "XMLHttpRequest",
     "Accept": "application/json, text/javascript, */*; q=0.01",
     "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "http://213.32.24.208/ints/client/smscdr.php",
-    "Connection": "keep-alive"
+    "Referer": "http://109.236.84.81/ints/client/smscdr.php",
+    "Connection": "keep-alive",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache"
 }
 
 CHECK_INTERVAL = 10
 STATE_FILE = "state.json"
 
-# Button URLs
+# Button URLs - ALL from environment variables
 DEVELOPER_URL = "https://t.me/botcasx"
 # Get from environment variables with better defaults
 NUMBERS_URL_1 = os.getenv("NUMBERS_URL_1", "https://t.me/alltgmethod11")
 NUMBERS_URL_2 = os.getenv("NUMBERS_URL_2", "https://t.me/CyberOTPCore")
 SUPPORT_URL_1 = os.getenv("SUPPORT_URL_1", "https://t.me/+zu_E8bhN0WU5OTNl")
 SUPPORT_URL_2 = os.getenv("SUPPORT_URL_2", "https://t.me/CYBER_OTP1_CORE")
+
+
 
 # =========================================
 
@@ -118,7 +124,7 @@ def clean_phone_number(number):
     return number
 
 def build_payload():
-    """Build AJAX payload"""
+    """Build AJAX payload for the new URL"""
     today = datetime.now().strftime("%Y-%m-%d")
     timestamp = int(time.time() * 1000)
     
@@ -193,10 +199,13 @@ def format_message(row):
         service = row[3] if len(row) > 3 else "Unknown"
         message = row[4] if len(row) > 4 else ""
         
-        # Extract country
+        # Extract country from route
         country = "Unknown"
         if route and isinstance(route, str):
-            country = route.split()[0] if route.split() else "Unknown"
+            # Remove any numbers/dashes and take first word
+            country_parts = re.split(r'[\d-]', route, 1)
+            if country_parts and country_parts[0].strip():
+                country = country_parts[0].strip()
         
         # Extract OTP
         otp = extract_otp(message)
@@ -209,7 +218,6 @@ def format_message(row):
         safe_date = html.escape(str(date))
         
         # Format message - use newlines instead of <br> tags
-        # Telegram HTML doesn't support <br>, use literal newlines
         safe_message = html.escape(str(message))
         
         # Format as HTML with newlines
@@ -270,14 +278,13 @@ def send_telegram(text, chat_id):
     try:
         response = requests.post(url, json=payload, timeout=15)
         if response.status_code == 200:
-            logging.info(f"✓ Message sent to chat {chat_id}")
             return True
         else:
             error_data = response.json()
-            logging.error(f"✗ Telegram API error for chat {chat_id}: {error_data.get('description', 'Unknown error')}")
+            logging.error(f"Telegram API error: {error_data.get('description', 'Unknown error')}")
             return False
     except Exception as e:
-        logging.error(f"✗ Error sending to Telegram (chat {chat_id}): {e}")
+        logging.error(f"Error sending to Telegram: {e}")
         return False
 
 # ================= CORE LOGIC =================
@@ -289,9 +296,7 @@ def fetch_latest_sms():
     try:
         params = build_payload()
         
-        # Log request details
-        logging.info(f"🔍 Fetching data from {AJAX_URL}")
-        
+        logging.info(f"Fetching data from {AJAX_URL}")
         response = session.get(AJAX_URL, params=params, timeout=30)
         
         if response.status_code != 200:
@@ -307,14 +312,14 @@ def fetch_latest_sms():
         
         rows = data.get("aaData", [])
         if not rows:
-            logging.info("No data found in response")
+            logging.debug("No data found in response")
             return
         
-        logging.info(f"Found {len(rows)} rows")
+        logging.info(f"Found {len(rows)} total rows")
         
         # Filter valid rows
         valid_rows = []
-        for idx, row in enumerate(rows):
+        for row in rows:
             if not isinstance(row, list) or len(row) < 5:
                 continue
             
@@ -347,10 +352,10 @@ def fetch_latest_sms():
         
         # Check if already processed
         if STATE["last_uid"] == sms_id or sms_id in STATE.get("processed_ids", []):
-            logging.info("No new SMS found")
+            logging.debug("No new SMS found")
             return
         
-        logging.info(f"📨 New SMS detected: {newest[2]} at {newest[0]}")
+        logging.info(f"New SMS detected: {newest[2]} at {newest[0]}")
         
         # Format message
         formatted_msg = format_message(newest)
@@ -366,7 +371,7 @@ def fetch_latest_sms():
                 time.sleep(1)  # Small delay between sends
         
         if success_count > 0:
-            logging.info(f"✅ OTP sent to {success_count} chats for {newest[2]}")
+            logging.info(f"OTP sent to {success_count} chats for {newest[2]}")
             
             # Update state
             STATE["last_uid"] = sms_id
@@ -380,7 +385,7 @@ def fetch_latest_sms():
             
             save_state(STATE)
         else:
-            logging.error("❌ Failed to send to all chats")
+            logging.error("Failed to send to any chat")
         
     except requests.RequestException as e:
         logging.error(f"Network error: {e}")
@@ -389,7 +394,21 @@ def fetch_latest_sms():
         import traceback
         traceback.print_exc()
 
-# ================= MAIN =================
+def check_environment():
+    """Check if all required environment variables are set"""
+    required_vars = ["BOT_TOKEN", "PHPSESSID"]
+    missing_vars = []
+    
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+    
+    if missing_vars:
+        logging.warning(f"Missing environment variables: {', '.join(missing_vars)}")
+        logging.warning("Using default values. This may not work properly.")
+        return False
+    
+    return True
 
 def print_config():
     """Print configuration details"""
@@ -400,6 +419,10 @@ def print_config():
     logging.info(f"Chat IDs: {', '.join(CHAT_IDS)}")
     logging.info(f"Check Interval: {CHECK_INTERVAL} seconds")
     logging.info("=" * 60)
+    logging.info("Authentication:")
+    logging.info(f"Bot Token: {'✓ Set' if os.getenv('BOT_TOKEN') else '✗ Using default'}")
+    logging.info(f"Session ID: {'✓ Set' if os.getenv('PHPSESSID') else '✗ Using default'}")
+    logging.info("=" * 60)
     logging.info("Button Configuration:")
     logging.info(f"1. 🧑‍💻 Dev: {DEVELOPER_URL}")
     logging.info(f"2. 📱 Numbers 1: {NUMBERS_URL_1}")
@@ -407,22 +430,13 @@ def print_config():
     logging.info(f"4. 🆘 Support 1: {SUPPORT_URL_1}")
     logging.info(f"5. 🆘 Support 2: {SUPPORT_URL_2}")
     logging.info("=" * 60)
-    
-    # Check environment variables
-    env_vars = {
-        "NUMBERS_URL_2": NUMBERS_URL_2,
-        "SUPPORT_URL_1": SUPPORT_URL_1,
-        "SUPPORT_URL_2": SUPPORT_URL_2
-    }
-    
-    for var_name, value in env_vars.items():
-        if value and "example" not in value:
-            logging.info(f"✅ {var_name}: {value}")
-        else:
-            logging.warning(f"⚠️  {var_name} using default. Set with: heroku config:set {var_name}=YOUR_URL")
+
+# ================= MAIN =================
 
 def main():
     """Main function"""
+    # Check environment
+    check_environment()
     print_config()
     
     # Main loop
@@ -441,7 +455,7 @@ def main():
             logging.error(f"Error in main loop ({error_count}/{max_errors}): {e}")
             
             if error_count >= max_errors:
-                logging.error("Too many consecutive errors. Waiting 60 seconds before retry...")
+                logging.error("Too many consecutive errors. Waiting 60 seconds...")
                 time.sleep(60)
                 error_count = 0
         
