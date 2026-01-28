@@ -19,7 +19,7 @@ CHAT_IDS = ["-1003559187782", "-1003316982194"]
 
 # Cookies - Update with current session
 COOKIES = {
-    "PHPSESSID": "78e0116d55971a2c1c7106936db5fca4"
+    "PHPSESSID": os.getenv("PHPSESSID") or "PUT_SESSION_HERE"
 }
 
 HEADERS = {
@@ -37,10 +37,10 @@ STATE_FILE = "state.json"
 # Button URLs
 DEVELOPER_URL = "https://t.me/botcasx"
 # Get from environment variables with better defaults
-NUMBERS_URL_1 = os.getenv("NUMBERS_URL_1", "https://t.me/CyberOTPCore")
-NUMBERS_URL_2 = os.getenv("NUMBERS_URL_2", "https://t.me/nothing")
-SUPPORT_URL_1 = os.getenv("SUPPORT_URL_1", "https://t.me/nothing")
-SUPPORT_URL_2 = os.getenv("SUPPORT_URL_2", "https://t.me/nothing")
+NUMBERS_URL_1 = os.getenv("NUMBERS_URL_1", "https://t.me/alltgmethod11")
+NUMBERS_URL_2 = os.getenv("NUMBERS_URL_2", "https://t.me/CyberOTPCore")
+SUPPORT_URL_1 = os.getenv("SUPPORT_URL_1", "https://t.me/+zu_E8bhN0WU5OTNl")
+SUPPORT_URL_2 = os.getenv("SUPPORT_URL_2", "https://t.me/CYBER_OTP1_CORE")
 
 # =========================================
 
