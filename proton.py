@@ -234,7 +234,7 @@ def format_message(row):
             f"💬 <b>Message Content</b>\n"
             f"<i>{safe_message}</i>\n"
             "━━━━━━━━━━━━━━━━━━━\n"
-            "⚡ <b>POWERED BY @Rasel424282</b>"
+            "⚡ <b>POWERED BY @Queenansari072</b>"
         )
         
         return formatted
